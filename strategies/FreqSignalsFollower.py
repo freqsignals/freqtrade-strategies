@@ -1,12 +1,14 @@
+import os
 from pandas import DataFrame
 from freqsignals import FreqSignalsStrategy
+DATA_SET_ID = os.environ.get("FREQSIGNALS_DATA_SET_ID")
 
 
 class FreqSignalsFollower(FreqSignalsStrategy):
 
     freqsignals_data_set_names = {
         # Mapping of a data set id to the name of the feature / column
-        "e7041595-8851-4c80-aba5-944468ee7820": "fs_signal"
+        DATA_SET_ID: "fs_signal"
     }
 
     minimal_roi = {
@@ -26,6 +28,9 @@ class FreqSignalsFollower(FreqSignalsStrategy):
     }
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # Set a default for if it's not found
+        dataframe['fs_signal'] = None
+        # add the pair signals from freqsignals
         dataframe = self.freqsignals_add_pair_signals(dataframe, metadata['pair'])
 
         return dataframe
