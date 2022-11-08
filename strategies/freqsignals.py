@@ -217,7 +217,6 @@ class FreqSignalsMixin:
                     self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]] = {}
                 if signal["updated_date"] not in self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]]:
                     self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]][signal["updated_date"]] = signal
-                    logger.info(f"received signal for {signal['symbol']} of {signal['value']}")
 
     def freqsignals_add_pair_signals(self, dataframe: DataFrame, pair: str, signal_name=None, data_set_id=None, include_context=False) -> DataFrame:
         """
@@ -255,9 +254,11 @@ class FreqSignalsMixin:
 
 class FreqSignalsStrategy(IStrategy, FreqSignalsMixin):
 
+    # Limit to only specific datasets
     freqsignals_data_set_ids = ["e7041595-8851-4c80-aba5-944468ee7820"]
+    # Mapping of a data set id to the name of the feature / column
     freqsignals_data_set_names = {
-        "e7041595-8851-4c80-aba5-944468ee7820": "signal"
+        "e7041595-8851-4c80-aba5-944468ee7820": "fs_signal"
     }
         
     minimal_roi = {
@@ -271,7 +272,7 @@ class FreqSignalsStrategy(IStrategy, FreqSignalsMixin):
         "main_plot": {},
         "subplots": {
             "Signals": {
-                "signal": {}
+                "fs_signal": {}
             }
         }
     }
@@ -284,12 +285,12 @@ class FreqSignalsStrategy(IStrategy, FreqSignalsMixin):
         self.freqsignals_bot_loop_start()
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        dataframe = self.freqsignals_add_pair_signals(dataframe, "SPY", "signaled_move")
+        dataframe = self.freqsignals_add_pair_signals(dataframe, "SPY")
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe.loc[(
-            (dataframe['signal'] >= 0.01) &
+            (dataframe['fs_signal'] >= 0.01) &
             (dataframe['volume'] > 0)
         ),
         ['enter_long', 'enter_tag']] = (1, 'signal_bull')
@@ -298,7 +299,7 @@ class FreqSignalsStrategy(IStrategy, FreqSignalsMixin):
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe.loc[(
-            (dataframe['signal'] <= -0.01) &
+            (dataframe['fs_signal'] <= -0.01) &
             (dataframe['volume'] > 0)
         ),
         ['exit_long', 'exit_tag']] = (1, 'signal_bear')

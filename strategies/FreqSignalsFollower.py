@@ -4,6 +4,11 @@ from freqsignals import FreqSignalsStrategy
 
 class FreqSignalsFollower(FreqSignalsStrategy):
 
+    freqsignals_data_set_names = {
+        # Mapping of a data set id to the name of the feature / column
+        "e7041595-8851-4c80-aba5-944468ee7820": "fs_signal"
+    }
+
     minimal_roi = {
         "0": 0.05
     }
@@ -15,7 +20,7 @@ class FreqSignalsFollower(FreqSignalsStrategy):
         "main_plot": {},
         "subplots": {
             "Signals": {
-                "signal": {}
+                "fs_signal": {}
             }
         }
     }
@@ -28,17 +33,17 @@ class FreqSignalsFollower(FreqSignalsStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         
         dataframe.loc[(
-            (dataframe['signal'] >= 0.01) &
+            (dataframe['fs_signal'] >= 0.01) &
             (dataframe['volume'] > 0)
         ),
-        ['enter_long', 'enter_tag']] = (1, 'bullish signal')
+        ['enter_long', 'enter_tag']] = (1, 'bullish_signal')
 
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe.loc[(
-            (dataframe['signal'] <= -0.01) &
+            (dataframe['fs_signal'] <= -0.01) &
             (dataframe['volume'] > 0)
         ),
-        ['exit_long', 'exit_tag']] = (1, 'bearish signal')
+        ['exit_long', 'exit_tag']] = (1, 'bearish_signal')
         return dataframe
