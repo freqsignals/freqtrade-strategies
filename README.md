@@ -4,11 +4,11 @@ Implementation of sample Freqtrade Strategies that integrate with [FreqSignals.c
 
 ## Installation and use
 
-The easiest way to integrate is to copy the contents of the `strategies` directory (or just `freqsignals.py` file) into your freqtrade's `userdata/strategies/` directory and then import it into your strategies. See `strategies/FreqSignalsFollower.py` for an example freqtrade strategy that uses the signals.
+The easiest way to integrate is to copy the contents of the `strategies` directory (or just `freqsignals.py` file) into your freqtrade's `userdata/strategies/` directory and then import it into your strategies. See [`strategies/FreqSignalsFollower.py`](strategies/FreqSignalsFollower.py) for an example freqtrade strategy that uses the signals.
 
 ### Environment Variables
 
-If you don't want to set environment variables, you can just set the variables `CLIENT_ID` and `CLIENT_SECRET` in the `freqsignals.py`. If you can set environment variables, set `FREQSIGNALS_CLIENT_ID` and `FREQSIGNALS_CLIENT_SECRET` to the client id and secret you've generated in FreqSignals.
+If you don't want to set environment variables, you can just set the variables `CLIENT_ID` and `CLIENT_SECRET` in the [`freqsignals.py`](strategies/freqsignals.py). If you can set environment variables, set `FREQSIGNALS_CLIENT_ID` and `FREQSIGNALS_CLIENT_SECRET` to the client id and secret you've generated in FreqSignals.
 
 ## Providing Signals
 
