@@ -159,7 +159,7 @@ class FreqSignalsAiWebhookDataProvider(IStrategy):
         msg = json.dumps({
             # required fields
             "symbol": metadata['pair'],
-            "value": dataframe.iloc[-1]["&-s_close"],
+            "value": round(dataframe.iloc[-1]["&-s_close"], 4),
             "ttl_minutes": 60,
             "data_set_id": 'bcea098e-aca4-4bb7-b30e-060625342b22',
             # any additional context
