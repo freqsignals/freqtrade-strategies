@@ -1,23 +1,19 @@
 import logging
-import os
 from functools import reduce
 from typing import Dict
 import pandas as pd
-import numpy as np
 import talib.abstract as ta
 from pandas import DataFrame
+import json
 from technical import qtpylib
 
 from freqtrade.strategy import CategoricalParameter, IStrategy, merge_informative_pair
-from freqsignals import FreqSignalsStrategy, FreqSignalsMixin
-DATA_SET_ID = os.environ.get("FREQSIGNALS_AI_DATA_SET_ID")
 
 
 logger = logging.getLogger(__name__)
 
 
-class FreqSignalsAiDataProvider(IStrategy, FreqSignalsMixin):
-# class FreqSignalsAiDataProvider(IStrategy):
+class FreqSignalsAiWebhookDataProvider(IStrategy):
     """
     Example strategy showing how the user connects their own
     IFreqaiModel to the strategy. Namely, the user uses:
@@ -51,11 +47,6 @@ class FreqSignalsAiDataProvider(IStrategy, FreqSignalsMixin):
     std_dev_multiplier_sell = CategoricalParameter(
         [0.75, 1, 1.25, 1.5, 1.75], space="sell", default=1.25, optimize=True)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.freqsignals_init()
-        self.signal_update_time_by_pair: Dict[str, str] = {}
-
     def populate_any_indicators(
         self, pair, df, tf, informative=None, set_generalized_indicators=False
     ):
@@ -85,22 +76,22 @@ class FreqSignalsAiDataProvider(IStrategy, FreqSignalsMixin):
             informative[f"%-{pair}sma-period_{t}"] = ta.SMA(informative, timeperiod=t)
             informative[f"%-{pair}ema-period_{t}"] = ta.EMA(informative, timeperiod=t)
 
-            # bollinger = qtpylib.bollinger_bands(
-            #     qtpylib.typical_price(informative), window=t, stds=2.2
-            # )
-            # informative[f"{pair}bb_lowerband-period_{t}"] = bollinger["lower"]
-            # informative[f"{pair}bb_middleband-period_{t}"] = bollinger["mid"]
-            # informative[f"{pair}bb_upperband-period_{t}"] = bollinger["upper"]
+            bollinger = qtpylib.bollinger_bands(
+                qtpylib.typical_price(informative), window=t, stds=2.2
+            )
+            informative[f"{pair}bb_lowerband-period_{t}"] = bollinger["lower"]
+            informative[f"{pair}bb_middleband-period_{t}"] = bollinger["mid"]
+            informative[f"{pair}bb_upperband-period_{t}"] = bollinger["upper"]
 
-            # informative[f"%-{pair}bb_width-period_{t}"] = (
-            #     informative[f"{pair}bb_upperband-period_{t}"]
-            #     - informative[f"{pair}bb_lowerband-period_{t}"]
-            # ) / informative[f"{pair}bb_middleband-period_{t}"]
-            # informative[f"%-{pair}close-bb_lower-period_{t}"] = (
-            #     informative["close"] / informative[f"{pair}bb_lowerband-period_{t}"]
-            # )
+            informative[f"%-{pair}bb_width-period_{t}"] = (
+                informative[f"{pair}bb_upperband-period_{t}"]
+                - informative[f"{pair}bb_lowerband-period_{t}"]
+            ) / informative[f"{pair}bb_middleband-period_{t}"]
+            informative[f"%-{pair}close-bb_lower-period_{t}"] = (
+                informative["close"] / informative[f"{pair}bb_lowerband-period_{t}"]
+            )
 
-            # informative[f"%-{pair}roc-period_{t}"] = ta.ROC(informative, timeperiod=t)
+            informative[f"%-{pair}roc-period_{t}"] = ta.ROC(informative, timeperiod=t)
 
             informative[f"%-{pair}relative_volume-period_{t}"] = (
                 informative["volume"] / informative["volume"].rolling(t).mean()
@@ -142,34 +133,6 @@ class FreqSignalsAiDataProvider(IStrategy, FreqSignalsMixin):
                 - 1
             )
 
-            # User "looks into the future" here to figure out if the future
-            # will be "up" or "down". This same column name is available to
-            # the user
-            # df['&s-up_or_down'] = np.where(df["close"].shift(-50) >
-            #                                df["close"], 'up', 'down')
-
-
-            # Classifiers are typically set up with strings as targets:
-            # df['&s-up_or_down'] = np.where( df["close"].shift(-100) >
-            #                                 df["close"], 'up', 'down')
-
-            # If user wishes to use multiple targets, they can add more by
-            # appending more columns with '&'. User should keep in mind that multi targets
-            # requires a multioutput prediction model such as
-            # templates/CatboostPredictionMultiModel.py,
-
-            # df["&-s_range"] = (
-            #     df["close"]
-            #     .shift(-self.freqai_info["feature_parameters"]["label_period_candles"])
-            #     .rolling(self.freqai_info["feature_parameters"]["label_period_candles"])
-            #     .max()
-            #     -
-            #     df["close"]
-            #     .shift(-self.freqai_info["feature_parameters"]["label_period_candles"])
-            #     .rolling(self.freqai_info["feature_parameters"]["label_period_candles"])
-            #     .min()
-            # )
-
         return df
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -192,36 +155,24 @@ class FreqSignalsAiDataProvider(IStrategy, FreqSignalsMixin):
                 dataframe["&-s_close_mean"] - dataframe["&-s_close_std"] * val
                 )
 
-        # Begin FreqSignals. Above here is from the FreqaiExampleStrategy
-        # https://github.com/freqtrade/freqtrade/blob/develop/freqtrade/templates/FreqaiExampleStrategy.py
-        last_update_time = self.signal_update_time_by_pair.get(metadata['pair'])
-        current_candle_time = dataframe.iloc[-1].date
+        # Send to FreqSignals
+        msg = json.dumps({
+            # required fields
+            "symbol": metadata['pair'],
+            "value": dataframe.iloc[-1]["&-s_close"],
+            "ttl_minutes": 60,
+            "data_set_id": 'bcea098e-aca4-4bb7-b30e-060625342b22',
+            # any additional context
+            "s_close": round(dataframe.iloc[-1]["&-s_close"], 4),
+            "s_close_mean": round(dataframe.iloc[-1]["&-s_close_mean"], 4),
+            "do_predict": round(dataframe.iloc[-1]["do_predict"], 4),
+            "DI_values": round(dataframe.iloc[-1]["DI_values"], 4),
+            "DI_values": round(dataframe.iloc[-1]["do_predict"], 4),
+            "price": round(dataframe.iloc[-1]["close"], 4),
+            "last_move": round(dataframe.iloc[-1]["close"] - dataframe.iloc[-2]["close"], 4),
+        })
 
-        if (last_update_time is None or last_update_time != current_candle_time):
-            # If there's a move, upload the signal with time TTL (minutes)
-            self.signal_update_time_by_pair[metadata['pair']] = current_candle_time
-            # up_down_value = dataframe.iloc[-1]["&s-up_or_down"]
-            up_down_value = dataframe.iloc[-1]["&-s_close"]
-            signal_data = {
-                # required fields
-                "symbol": metadata['pair'],
-                "value": 1 if up_down_value == 'up' else -1 if up_down_value == 'down' else 0,
-                "ttl_minutes": 60,
-                "data_set_id": DATA_SET_ID,
-                # any additional context
-                # "up_or_down": 1 if up_down_value == 'up' else -1 if up_down_value == 'down' else 0,
-                "s_close": round(dataframe.iloc[-1]["&-s_close"], 4),
-                "s_close_mean": round(dataframe.iloc[-1]["&-s_close_mean"], 4),
-                "do_predict": round(dataframe.iloc[-1]["do_predict"], 4),
-                "DI_values": round(dataframe.iloc[-1]["DI_values"], 4),
-                "DI_values": round(dataframe.iloc[-1]["do_predict"], 4),
-                "price": round(dataframe.iloc[-1]["close"], 4),
-                "last_move": round(dataframe.iloc[-1]["close"] - dataframe.iloc[-2]["close"], 4),
-            }
-            logger.info(f"setting signal for {metadata['pair']} at {current_candle_time}")
-            logger.info(signal_data)
-            self.freqsignals_client.post_signal(signal_data)
-        # End FreqSignals. Above here is from the FreqaiExampleStrategy
+        self.dp.send_msg(msg)
     
         return dataframe
 
