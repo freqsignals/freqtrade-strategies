@@ -22,16 +22,19 @@ class FreqSignalsFollower(FreqSignalsStrategy):
         "main_plot": {},
         "subplots": {
             "Signals": {
-                "fs_signal": {}
+                "fs_signal": {},
+                "fs_signal_last_move": {}
             }
         }
     }
 
+
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # Set a default for if it's not found
         dataframe['fs_signal'] = None
-        # add the pair signals from freqsignals
-        dataframe = self.freqsignals_add_pair_signals(dataframe, metadata['pair'])
+
+        self.freqsignals_load_signal_history(metadata['pair'], DATA_SET_ID)
+        dataframe = self.freqsignals_add_pair_signals(dataframe, metadata['pair'], include_context=True)
 
         return dataframe
 

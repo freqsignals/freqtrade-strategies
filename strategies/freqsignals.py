@@ -198,6 +198,32 @@ class FreqSignalsClient:
         query_params = urlencode({**filters})
         return self.get(f"/api/crud/signals/?{query_params}")
 
+    def get_signal_history(self, symbol, data_set_id, filters=None, multiple_pages=False):
+        if filters is None:
+            filters = {}
+        query_params = urlencode({**filters})
+        if multiple_pages:
+            filters["limit"] = 1000
+            filters["offset"] = 0
+            historical_signals = []
+            more_pages = True
+            while more_pages:
+                historical_signals_res = self.get(f"/api/crud/signal_history/?symbol={symbol}&data_set_id={data_set_id}&{query_params}")
+                if historical_signals_res["results"]:
+                    historical_signals += historical_signals_res["results"]
+                    filters["offset"] = filters["offset"] + filters["limit"]
+                    if (len(historical_signals_res["results"]) < filters["limit"]):
+                        more_pages = False
+                else:
+                    more_pages = False
+            return {
+                "count": len(historical_signals),
+                "results": historical_signals
+            }
+
+        else:
+            return self.get(f"/api/crud/signal_history/?symbol={symbol}&data_set_id={data_set_id}&{query_params}")
+
     def log(self, level, msg, **kwargs):
         """
         Logging function hook that should be overridden if you want logging
@@ -223,7 +249,8 @@ class FreqSignalsMixin:
         Called in __init__ to set up the required strategy instance variables
         """
         self.freqsignals_client = FreqSignalsClient()
-        self.signals_by_pair_data_set_updated_date: Dict[str, Dict[str, Dict[str, Dict]]] = {}
+        self.freqsignals_by_pair_data_set_updated_date: Dict[str, Dict[str, Dict[str, Dict]]] = {}
+        self.freqsignals_loaded_historic_by_pair_data_set: Dict[Tuple[str, str], bool] = {}
 
     def freqsignals_bot_loop_start(self):
         """
@@ -236,19 +263,43 @@ class FreqSignalsMixin:
             response = self.freqsignals_client.get_signals()
             signals = response["results"] 
             for signal in signals:
-                if signal["symbol"] not in self.signals_by_pair_data_set_updated_date:
-                    self.signals_by_pair_data_set_updated_date[signal["symbol"]] = {}
-                if signal["data_set_id"] not in self.signals_by_pair_data_set_updated_date[signal["symbol"]]:
-                    self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]] = {}
-                if signal["updated_date"] not in self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]]:
-                    self.signals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]][signal["updated_date"]] = signal
+                if signal["symbol"] not in self.freqsignals_by_pair_data_set_updated_date:
+                    self.freqsignals_by_pair_data_set_updated_date[signal["symbol"]] = {}
+                if signal["data_set_id"] not in self.freqsignals_by_pair_data_set_updated_date[signal["symbol"]]:
+                    self.freqsignals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]] = {}
+                if signal["updated_date"] not in self.freqsignals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]]:
+                    self.freqsignals_by_pair_data_set_updated_date[signal["symbol"]][signal["data_set_id"]][signal["updated_date"]] = signal
+
+    def freqsignals_load_signal_history(self, symbol, data_set_id):
+        if symbol not in self.freqsignals_by_pair_data_set_updated_date:
+                self.freqsignals_by_pair_data_set_updated_date[symbol] = {}
+        if data_set_id not in self.freqsignals_by_pair_data_set_updated_date[symbol]:
+            self.freqsignals_by_pair_data_set_updated_date[symbol][data_set_id] = {}
+
+        # check if there is none or one datapoint - indicates that we haven't loaded historic yet
+        if not self.freqsignals_loaded_historic_by_pair_data_set.get((symbol, data_set_id)):
+            print(f"Loading historical signals for {symbol} in {data_set_id}")
+            historic_signals = self.freqsignals_client.get_signal_history(symbol=symbol, data_set_id=data_set_id)
+            self.freqsignals_loaded_historic_by_pair_data_set[(symbol, data_set_id)] = True
+            for historic_signal in historic_signals["results"]:
+                signal = {
+                    "symbol": symbol,
+                    "data_set_id": data_set_id,
+                    "created_at": historic_signal["t"],
+                    "updated_date": historic_signal["t"],
+                    "ttl_minutes": historic_signal["l"],
+                    "value": historic_signal["v"],
+                    "context": historic_signal["c"],
+                }
+                if signal["updated_date"] not in self.freqsignals_by_pair_data_set_updated_date[symbol][data_set_id]:
+                    self.freqsignals_by_pair_data_set_updated_date[symbol][data_set_id][signal["updated_date"]] = signal
 
     def freqsignals_add_pair_signals(self, dataframe: DataFrame, pair: str, signal_name=None, data_set_id=None, include_context=False) -> DataFrame:
         """
         Called in populate_indicators to set the signals on the dataframe
         """
 
-        signals_by_dataset = self.signals_by_pair_data_set_updated_date.get(pair, {})
+        signals_by_dataset = self.freqsignals_by_pair_data_set_updated_date.get(pair, {})
         for data_set_id, signals in signals_by_dataset.items():
             for updated_date, signal in signals.items():
                 if data_set_id:
