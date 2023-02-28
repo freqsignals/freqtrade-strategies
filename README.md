@@ -1,6 +1,8 @@
 # Freqtrade Strategies with Freqsignals
 
-Implementation of sample Freqtrade Strategies that integrate with [FreqSignals.com](https://freqsignals.com).
+Implementation of sample Freqtrade Strategies that integrate with [FreqSignals.com](https://freqsignals.com). FreqSignals is a platform enabling easier exchange of trading signals.
+
+Learn more at [https://freqsignals.com](https://freqsignals.com).
 
 ## Installation and Use
 
